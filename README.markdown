@@ -134,6 +134,52 @@ Rules are persisted automatically between reboots, although there are known issu
 
     class { 'firewall': }
 
+#### Alternative solution
+
+There is a simpler solution using in addition Camptocamp's firewall_c2c module (https://forge.puppetlabs.com/camptocamp/firewall_c2c) that transparently adds an autorequirement in the type so that firewall rules are applied alphabetically so that you don't have to declare dependencies explicitely.
+
+Consider the manifest:
+```puppet
+class { 'firewall': }
+firewall { '000 accept all icmp':
+  proto   => 'icmp',
+  action  => 'accept',
+}
+firewall { '001 accept all to lo interface':
+  proto   => 'all',
+  iniface => 'lo',
+  action  => 'accept',
+}
+firewall { '002 accept related established rules':
+  proto   => 'all',
+  ctstate => ['RELATED', 'ESTABLISHED'],
+  action  => 'accept',
+}
+```
+Without firewall_c2c module, you have to add explicit dependencies, otherwise rules are applied whithout specific order:
+```
+Notice: /Stage[main]/Main/Firewall[000 accept all icmp]/ensure: current_value absent, should be present (noop)
+Notice: /Stage[main]/Main/Firewall[002 accept related established rules]/ensure: current_value absent, should be present (noop)
+Notice: /Stage[main]/Main/Firewall[001 accept all to lo interface]/ensure: current_value absent, should be present (noop)
+```
+With the module, no need to define explicit dependencies:
+```
+Notice: /Stage[main]/Main/Firewall[000 accept all icmp]/ensure: current_value absent, should be present (noop)
+Notice: /Stage[main]/Main/Firewall[001 accept all to lo interface]/ensure: current_value absent, should be present (noop)
+Notice: /Stage[main]/Main/Firewall[002 accept related established rules]/ensure: current_value absent, should be present (noop)
+```
+And with `--debug`:
+```
+Debug: /Firewall[000 accept all icmp]: Autorequiring Package[iptables]
+Debug: /Firewall[000 accept all icmp]: Autorequiring Package[iptables-persistent]
+Debug: /Firewall[001 accept all to lo interface]: Autorequiring Package[iptables]
+Debug: /Firewall[001 accept all to lo interface]: Autorequiring Package[iptables-persistent]
+Debug: /Firewall[001 accept all to lo interface]: Autorequiring Firewall[000 accept all icmp]
+Debug: /Firewall[002 accept related established rules]: Autorequiring Package[iptables]
+Debug: /Firewall[002 accept related established rules]: Autorequiring Package[iptables-persistent]
+Debug: /Firewall[002 accept related established rules]: Autorequiring Firewall[001 accept all to lo interface]
+```
+
 ###Upgrading
 
 Use these steps if you already have a version of the Firewall module installed.
